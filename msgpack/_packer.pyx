@@ -63,6 +63,9 @@ cdef class Packer(object):
     :param bool use_bin_type:
         Use bin type introduced in msgpack spec 2.0 for bytes.
         It also enable str8 type for unicode.
+    :param bool sort_keys:
+        If sort_keys is True, then the output of dictionaries will be sorted by key,
+        like json.JSONEncoder's sort_keys parameter. (default: False)
     """
     cdef msgpack_packer pk
     cdef object _default
@@ -72,6 +75,7 @@ cdef class Packer(object):
     cdef char *unicode_errors
     cdef bool use_float
     cdef bint autoreset
+    cdef bool sort_keys
 
     def __cinit__(self):
         cdef int buf_size = 1024*1024
@@ -82,12 +86,14 @@ cdef class Packer(object):
         self.pk.length = 0
 
     def __init__(self, default=None, encoding='utf-8', unicode_errors='strict',
-                 use_single_float=False, bint autoreset=1, bint use_bin_type=0):
+                 use_single_float=False, bint autoreset=1, bint use_bin_type=0,
+                 sort_keys=False):
         """
         """
         self.use_float = use_single_float
         self.autoreset = autoreset
         self.pk.use_bin_type = use_bin_type
+        self.sort_keys = sort_keys
         if default is not None:
             if not PyCallable_Check(default):
                 raise TypeError("default must be a callable.")
@@ -171,6 +177,17 @@ cdef class Packer(object):
                 ret = msgpack_pack_raw(&self.pk, len(o))
                 if ret == 0:
                     ret = msgpack_pack_raw_body(&self.pk, rawval, len(o))
+            elif self.sort_keys and PyDict_Check(o):
+                L = len(o)
+                if L > (2**32)-1:
+                    raise ValueError("dict is too large")
+                ret = msgpack_pack_map(&self.pk, L)
+                if ret == 0:
+                    for k in sorted(o.keys()):
+                        ret = self._pack(k, nest_limit-1)
+                        if ret != 0: break
+                        ret = self._pack(o[k], nest_limit-1)
+                        if ret != 0: break
             elif PyDict_CheckExact(o):
                 d = <dict>o
                 L = len(d)

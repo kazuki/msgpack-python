@@ -65,3 +65,15 @@ def test_an_exception_in_objecthook2():
     with raises(DecodeError):
         packed = packb({1: [{'__complex__': True, 'real': 1, 'imag': 2}]})
         unpackb(packed, list_hook=bad_complex_decoder, use_list=1)
+
+
+def test_sort_keys():
+    keys = 'abcd'
+    expecteds = [
+        b'\x82\xa1a\x00\xa1b\x01',
+        b'\x82\xa1b\x00\xa1c\x01',
+        b'\x82\xa1c\x00\xa1d\x01',
+    ]
+    for i in range(len(keys) - 1):
+        packed = packb({keys[i]: 0, keys[i + 1]: 1}, sort_keys=True)
+        assert packed == expecteds[i]
